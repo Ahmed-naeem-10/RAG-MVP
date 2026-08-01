@@ -1,0 +1,30 @@
+# RAG MVP - Dependencies (100% Free — Groq LLM + Local Embeddings)
+# Python 3.13 compatible
+# Install with: pip install -r requirements.txt
+
+# PDF Parsing
+pypdf==4.3.1
+
+# LangChain ecosystem
+langchain==0.3.25
+langchain-community==0.3.24
+langchain-chroma==0.2.4
+langchain-groq==0.3.2
+
+# Vector Store (local, free)
+chromadb==1.0.9
+
+# Local Embeddings (no API key needed)
+sentence-transformers==3.4.1
+
+# Streamlit UI
+streamlit==1.45.1
+
+# Environment variable loading
+python-dotenv==1.1.0
+
+# Hybrid Search (BM25) - optional
+rank-bm25==0.2.2
+
+# Utilities
+numpy==2.2.6
