@@ -209,10 +209,14 @@ def retrieve(query: str) -> RetrievalResult:
     metas = results.get("metadatas", [[]])[0]
     distances = results.get("distances", [[]])[0]
 
-    # Convert cosine distance [0, 2] → similarity [0.0, 1.0]
+    # Convert ChromaDB cosine distance to a similarity score.
+    # ChromaDB's "cosine" space returns distance = 1 - cosine_similarity,
+    # in the range [0, 2] (0 = identical direction, 2 = opposite).
+    # Inverting gives cosine similarity in [-1, 1]; we clamp the result to
+    # [0.0, 1.0] to honour the Similarity_Score range defined in the spec.
     dense_chunks: List[RetrievedChunk] = []
     for text, meta, dist in zip(docs, metas, distances):
-        similarity = round(1.0 - (dist / 2.0), 4)
+        similarity = round(max(0.0, 1.0 - dist), 4)
         if similarity >= config.SIMILARITY_THRESHOLD:
             dense_chunks.append(
                 RetrievedChunk(

@@ -1,21 +1,21 @@
 # RAG MVP - Dependencies (100% Free — Groq LLM + Local Embeddings)
-# Python 3.13 compatible
+# Python 3.12 compatible (pin runtime.txt to 3.12 for Streamlit Cloud)
 # Install with: pip install -r requirements.txt
 
 # PDF Parsing
 pypdf==4.3.1
 
-# LangChain ecosystem
+# LangChain (text splitter only)
 langchain==0.3.25
-langchain-community==0.3.24
-langchain-chroma==0.2.4
-langchain-groq==0.3.2
 
 # Vector Store (local, free)
 chromadb==1.0.9
 
-# Local Embeddings (no API key needed)
-sentence-transformers==3.4.1
+# Local embeddings (HashingVectorizer — no API key, no model download)
+scikit-learn==1.9.0
+
+# Groq LLM client (free tier)
+groq==0.28.0
 
 # Streamlit UI
 streamlit==1.45.1
@@ -27,4 +27,4 @@ python-dotenv==1.1.0
 rank-bm25==0.2.2
 
 # Utilities
-numpy==2.2.6
+numpy==2.2.5

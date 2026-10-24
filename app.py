@@ -17,6 +17,7 @@ Features:
 import sys
 import time
 import logging
+from pathlib import Path
 
 import streamlit as st
 
@@ -91,6 +92,53 @@ def get_indexed_doc_count() -> int:
         return len(sources)
     except Exception:
         return 0
+
+
+# ---------------------------------------------------------------------------
+# Cold-start auto-ingestion (for ephemeral hosting such as Streamlit
+# Community Cloud / Hugging Face Spaces, where the filesystem is wiped on
+# every container restart). Cached per process via @st.cache_resource.
+# ---------------------------------------------------------------------------
+
+@st.cache_resource
+def ensure_ingested() -> int:
+    """
+    Populate the vector store on a fresh container, then return the document
+    count.
+
+    Runs once per process. Only ingests when the store is empty AND the
+    configured DOCS_DIR contains PDF files, so it never disturbs an existing
+    store and never terminates the process.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    int
+        Number of unique source documents available after the check.
+    """
+    try:
+        client = get_chroma_client()
+        collection = get_or_create_collection(client)
+        if collection.count() == 0:
+            docs_path = Path(config.DOCS_DIR)
+            if docs_path.is_dir() and any(docs_path.glob("*.pdf")):
+                logger.info(
+                    "Vector store empty on startup — auto-ingesting from %s",
+                    config.DOCS_DIR,
+                )
+                run_ingestion(docs_dir=config.DOCS_DIR, force_reingest=False)
+        return len(get_ingested_sources(collection))
+    except Exception as exc:
+        logger.warning("Auto-ingestion skipped: %s", exc)
+        return 0
+
+
+# Populate the store before rendering the UI so the sidebar shows the real
+# document count. Cheap no-op on every subsequent rerun (cached).
+ensure_ingested()
 
 
 # ---------------------------------------------------------------------------
