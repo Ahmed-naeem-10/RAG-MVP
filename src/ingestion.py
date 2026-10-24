@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import List, Tuple
 
 import chromadb
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
@@ -210,6 +209,39 @@ def extract_pages(pdf_path: Path) -> List[Tuple[str, int]]:
     return pages
 
 
+def _split_text(text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
+    """
+    Split text into overlapping chunks using a simple character-based sliding
+    window. Mirrors the behaviour of LangChain's RecursiveCharacterTextSplitter
+    without the langchain dependency.
+
+    Parameters
+    ----------
+    text : str
+        Input text to split.
+    chunk_size : int
+        Maximum number of characters per chunk.
+    chunk_overlap : int
+        Number of characters to overlap between consecutive chunks.
+
+    Returns
+    -------
+    List[str]
+        List of text chunks.
+    """
+    if not text:
+        return []
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunks.append(text[start:end])
+        if end >= len(text):
+            break
+        start += chunk_size - chunk_overlap
+    return chunks
+
+
 def chunk_pages(pages: List[Tuple[str, int]], source_name: str) -> List[dict]:
     """
     Split extracted page text into overlapping chunks with metadata.
@@ -226,14 +258,9 @@ def chunk_pages(pages: List[Tuple[str, int]], source_name: str) -> List[dict]:
     List[dict]
         List of dicts with keys 'text', 'source', and 'page'.
     """
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=config.CHUNK_SIZE,
-        chunk_overlap=config.CHUNK_OVERLAP,
-        length_function=len,
-    )
     all_chunks = []
     for page_text, page_num in pages:
-        splits = splitter.split_text(page_text)
+        splits = _split_text(page_text, config.CHUNK_SIZE, config.CHUNK_OVERLAP)
         for split in splits:
             all_chunks.append({
                 "text": split,
