@@ -39,6 +39,10 @@ from src.ingestion import (  # noqa: E402
     get_or_create_collection,
     run_ingestion,
     get_ingested_sources,
+    extract_pages_from_bytes,
+    chunk_pages,
+    embed_and_store,
+    delete_source_from_collection,
 )
 from src.retriever import retrieve, ResultStatus  # noqa: E402
 from src.generator import generate_answer  # noqa: E402
@@ -156,28 +160,69 @@ with st.sidebar:
 
     st.divider()
 
-    # Ingest button
-    st.subheader("🔄 Ingest Documents")
-    st.caption(f"PDFs are loaded from: `{config.DOCS_DIR}`")
+    # ── PDF Upload ──────────────────────────────────────────────────────────
+    st.subheader("📤 Upload PDFs")
+    st.caption("Upload one or more PDF files to make them queryable.")
 
-    force_reingest = st.checkbox("Force re-ingest (overwrite existing)", value=False)
+    uploaded_files = st.file_uploader(
+        "Choose PDF files",
+        type="pdf",
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+    )
 
-    if st.button("Ingest / Refresh Documents", use_container_width=True, type="primary"):
-        with st.spinner("Ingesting documents… this may take a moment."):
-            try:
-                run_ingestion(docs_dir=config.DOCS_DIR, force_reingest=force_reingest)
-                st.success("✅ Ingestion complete! Refresh the page to update the document count.")
-            except SystemExit:
-                st.error(
-                    "Ingestion failed: no PDF files found in the configured directory, "
-                    f"or the path `{config.DOCS_DIR}` does not exist. "
-                    "Check your DOCS_DIR setting in .env."
-                )
-            except Exception as exc:
-                logger.error("Ingestion error: %s", exc)
-                st.error(
-                    "Ingestion encountered an error. Please check the terminal logs and try again."
-                )
+    force_upload = st.checkbox("Re-ingest if already uploaded", value=False)
+
+    if st.button("Ingest Uploaded PDFs", use_container_width=True, type="primary",
+                 disabled=not uploaded_files):
+        client = get_chroma_client()
+        collection = get_or_create_collection(client)
+        ingested_sources = get_ingested_sources(collection)
+
+        any_done = False
+        for uf in uploaded_files:
+            source_name = uf.name
+            if source_name in ingested_sources and not force_upload:
+                st.info(f"⏭️ **{source_name}** already ingested — tick 'Re-ingest' to overwrite.")
+                continue
+            if source_name in ingested_sources and force_upload:
+                delete_source_from_collection(collection, source_name)
+
+            with st.spinner(f"Processing **{source_name}**…"):
+                try:
+                    pages = extract_pages_from_bytes(uf.read(), source_name)
+                    if not pages:
+                        st.warning(f"⚠️ **{source_name}** has no extractable text (image-only PDF?).")
+                        continue
+                    chunks = chunk_pages(pages, source_name)
+                    embed_and_store(chunks, collection, source_name)
+                    st.success(f"✅ **{source_name}** — {len(chunks)} chunks ingested.")
+                    any_done = True
+                except Exception as exc:
+                    logger.error("Upload ingest error for '%s': %s", source_name, exc)
+                    st.error(f"❌ Failed to ingest **{source_name}**. Please try again.")
+
+        if any_done:
+            st.caption("Reload the page to refresh the document count.")
+
+    st.divider()
+
+    # ── Directory Ingest (for local / server-side PDFs) ─────────────────────
+    with st.expander("🔄 Ingest from server directory"):
+        st.caption(f"PDFs loaded from: `{config.DOCS_DIR}`")
+        force_reingest = st.checkbox("Force re-ingest (overwrite existing)", value=False)
+        if st.button("Ingest / Refresh from Directory", use_container_width=True):
+            with st.spinner("Ingesting documents…"):
+                try:
+                    run_ingestion(docs_dir=config.DOCS_DIR, force_reingest=force_reingest)
+                    st.success("✅ Ingestion complete!")
+                except SystemExit:
+                    st.error(
+                        f"No PDF files found in `{config.DOCS_DIR}` or path does not exist."
+                    )
+                except Exception as exc:
+                    logger.error("Ingestion error: %s", exc)
+                    st.error("Ingestion encountered an error. Check the terminal logs.")
 
     st.divider()
 

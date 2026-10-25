@@ -209,6 +209,45 @@ def extract_pages(pdf_path: Path) -> List[Tuple[str, int]]:
     return pages
 
 
+def extract_pages_from_bytes(pdf_bytes: bytes, source_name: str) -> List[Tuple[str, int]]:
+    """
+    Extract text from every page of a PDF supplied as raw bytes.
+
+    Used for browser-uploaded files that never touch the filesystem.
+    Skips image-only pages (no extractable text) and logs a warning for each.
+
+    Parameters
+    ----------
+    pdf_bytes : bytes
+        Raw PDF file content.
+    source_name : str
+        Display name used in log messages (usually the original file name).
+
+    Returns
+    -------
+    List[Tuple[str, int]]
+        List of (page_text, page_number) tuples. Page numbers are 1-indexed.
+
+    Raises
+    ------
+    PdfReadError
+        If the bytes cannot be parsed as a PDF.
+    """
+    import io
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    pages = []
+    for page_num, page in enumerate(reader.pages, start=1):
+        text = (page.extract_text() or "").strip()
+        if not text:
+            logger.warning(
+                "No extractable text on page %d of '%s' — skipping (may be image-only).",
+                page_num, source_name,
+            )
+            continue
+        pages.append((text, page_num))
+    return pages
+
+
 def _split_text(text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
     """
     Split text into overlapping chunks using a simple character-based sliding
